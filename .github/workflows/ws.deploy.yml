@@ -4,10 +4,6 @@ on:
   release:
     types: [published]
 
-  push:
-    branches:
-      - main
-
 jobs:
   Deploy:
     name: 'Installing, Building, and Deploying Function'
