@@ -27,7 +27,7 @@ jobs:
 
       - name: "Installing, and Deploying Function"
         run: |
-          cd lambdas
+          cd lambda
           pwd
           for fun in stream-concurrently-ws ; do
             echo ${fun}
