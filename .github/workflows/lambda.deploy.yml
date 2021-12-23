@@ -6,7 +6,7 @@ on:
 
 jobs:
   Deploy:
-    name: 'Installing, Building, and Deploying Function'
+    name: 'Installing, Ziping, and Deploying Function'
     runs-on: ubuntu-latest
     environment: production
 
@@ -23,21 +23,17 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ap-south-1
+          aws-region: ${{ secrets.AWS_REGION }}
 
       - name: "Installing, and Deploying Function"
         run: |
           cd lambda
           pwd
-          for fun in stream-concurrently-ws ; do
-            echo ${fun}
+          for fun in stream-concurrently-ws stream-concurrently-api ; do
             cd ${fun}
             if [[ -f "index.js" ]]; then
-              echo "Creating Zip"
               zip -j deploy.zip ./*
-              echo "Deploying Lambda"
               aws lambda update-function-code --function-name=${fun} --zip-file=fileb://deploy.zip
-              echo "${fun} Deployed."
             fi
             cd ..
           done
