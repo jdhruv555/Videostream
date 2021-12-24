@@ -1,6 +1,6 @@
 import Head from 'next/head';
 import type { NextPage } from 'next';
-import { useEffect, useState, useContext } from 'react';
+import { useEffect, useState, useContext, useRef } from 'react';
 import { useRouter } from 'next/router';
 import ReactPlayer from 'react-player';
 import crypto from 'crypto';
@@ -41,7 +41,7 @@ const Watch: NextPage = () => {
         played: 0
     });
     const [isPlaying, setPlaying] = useState<boolean>(false);
-    const [player, setPlayer] = useState<any>(null);
+    const ref = useRef(null);
     const router = useRouter();
     const [data, setData] = useState<dataInterface>({ roomId: null, userName: null, videoLink: null });
     const { ws } = useContext(WsContext);
@@ -78,7 +78,8 @@ const Watch: NextPage = () => {
                         break;
 
                     case "jump":
-                        player.seekTo(res['time-frame']);
+                        ref.current.seekTo(res['time-frame']);
+                        setPlaying(true);
                         break;
 
                     default:
@@ -100,7 +101,7 @@ const Watch: NextPage = () => {
                     <main>
                         {
                             isPlaying ?
-                                <Icons.Play onClick={
+                                <Icons.Play className='text-slate-50 text-2xl font-bold' onClick={
                                     () => {
                                         sendMessage(JSON.stringify({
                                             "action": "isPlaying",
@@ -109,7 +110,7 @@ const Watch: NextPage = () => {
                                         }))
                                     }
                                 } /> :
-                                <Icons.Stop onClick={
+                                <Icons.Stop className='text-slate-50 text-2xl font-bold' onClick={
                                     () => {
                                         sendMessage(JSON.stringify({
                                             "action": "isPlaying",
@@ -121,8 +122,8 @@ const Watch: NextPage = () => {
                         }
                         {
                             video.isMute ?
-                                <Icons.VolumeMute onClick={() => setVideo({ ...video, isMute: false })} /> :
-                                <Icons.VolumeDown onClick={() => setVideo({ ...video, isMute: true })} />
+                                <Icons.VolumeMute className='text-slate-50 text-2xl font-bold' onClick={() => setVideo({ ...video, isMute: false })} /> :
+                                <Icons.VolumeDown className='text-slate-50 text-2xl font-bold' onClick={() => setVideo({ ...video, isMute: true })} />
                         }
                         <input
                             type='range' min={0} max={1} step='any'
@@ -145,8 +146,8 @@ const Watch: NextPage = () => {
                             muted={video.isMute}
                             playing={isPlaying}
                             onProgress={e => setVideo({ ...video, played: e.played, loaded: e.loaded })}
-                            onEnded={() => setPlayer({ ...video, player: 1, loaded: 1 })}
-                            ref={ref => setPlayer(ref)}
+                            onEnded={() => setVideo({ ...video, played: 1, loaded: 1 })}
+                            ref={ref}
 
                         />
                     </main> : <Spinner />
