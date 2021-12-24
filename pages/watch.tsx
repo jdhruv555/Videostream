@@ -31,6 +31,7 @@ interface dataInterface {
     videoLink: string;
     roomId: string;
     userName: string;
+    names: string[];
 };
 
 const Watch: NextPage = () => {
@@ -43,7 +44,7 @@ const Watch: NextPage = () => {
     const [isPlaying, setPlaying] = useState<boolean>(false);
     const ref = useRef(null);
     const router = useRouter();
-    const [data, setData] = useState<dataInterface>({ roomId: null, userName: null, videoLink: null });
+    const [data, setData] = useState<dataInterface>({ roomId: null, userName: null, videoLink: null, names: null });
     const { ws } = useContext(WsContext);
 
     const sendMessage = (message: string) => {
@@ -65,8 +66,10 @@ const Watch: NextPage = () => {
     }
 
     useEffect(() => {
-        if (router.query.q === undefined) router.replace('/')
-        else setData(JSON.parse(decrypt(router.query.q.toString())));
+        const queryData = JSON.parse(decrypt(router.query.q.toString()));
+
+        if (router.query.q === undefined) router.replace('/');
+        else setData(queryData);
 
         ws.onmessage = message => {
             if (message.data) {
@@ -80,6 +83,10 @@ const Watch: NextPage = () => {
                     case "jump":
                         ref.current.seekTo(res['time-frame']);
                         setPlaying(true);
+                        break;
+
+                    case "usersConnected":
+                        setData({ ...queryData, names: res.names });
                         break;
 
                     default:
@@ -150,6 +157,9 @@ const Watch: NextPage = () => {
                             ref={ref}
 
                         />
+                        {
+                            data.names ? data.names.map((name, index) => <h1 key={index} className='text-slate-50 text-2xl font-bold'>{name}</h1>) : null
+                        }
                     </main> : <Spinner />
             }
         </section>

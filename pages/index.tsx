@@ -78,11 +78,13 @@ const Home: NextPage = () => {
               if (typeof window !== "undefined") { // browser
                 ws.send(JSON.stringify({
                   "action": "join",
-                  "room-id": code
+                  "room-id": code,
+                  "name": name
                 }));
 
                 ws.onmessage = (res) => {
-                  if ((res.data !== "") && (JSON.parse(res.data).status === 200)) {
+                  const { status, names } = JSON.parse(res.data);
+                  if ((res.data !== "") && (status === 200)) {
                     router.push({
                       pathname: '/watch',
                       query: {
@@ -90,7 +92,8 @@ const Home: NextPage = () => {
                           JSON.stringify({
                             videoLink: data.link,
                             roomId: code,
-                            userName: name
+                            userName: name,
+                            names: [...names]
                           })
                         )
                       }
@@ -117,7 +120,8 @@ const Home: NextPage = () => {
           ws.send(JSON.stringify({
             "action": "create-group",
             "room-id": roomId,
-            "link": url
+            "link": url,
+            "name": name
           }));
 
           ws.onmessage = (res) => {
@@ -129,7 +133,8 @@ const Home: NextPage = () => {
                     JSON.stringify({
                       videoLink: url,
                       roomId,
-                      userName: name
+                      userName: name,
+                      names: [name]
                     })
                   )
                 }

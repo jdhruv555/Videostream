@@ -25,10 +25,13 @@ exports.handler = async event => {
             }).promise();
 
             const users = data.Items[0].users;
+            const names = data.Items[0].names;
+
             const index = users.indexOf(user_id);
 
             if (index > -1) {
                 users.splice(index, 1);
+                names.splice(index, 1);
 
                 if (users.length === 0) {
                     await dynamo.delete({
@@ -43,65 +46,76 @@ exports.handler = async event => {
                         Key: {
                             'room-id': data.Items[0]['room-id']
                         },
-                        UpdateExpression: "set #users=:x",
+                        UpdateExpression: "set #users=:x, #names=:n",
                         ExpressionAttributeNames: {
-                            "#users": "users"
+                            "#users": "users",
+                            "#names": "names"
                         },
                         ExpressionAttributeValues: {
-                            ":x": [...users]
+                            ":x": [...users],
+                            ":n": [...names]
                         },
                         ReturnValues: "UPDATED_NEW"
                     }).promise();
+
+                    await Promise.all(users.map(async id => await sendMessage(id, JSON.stringify({ action: "usersConnected", names }))));
                 }
             }
         } else if (route === 'join') {
             const body = JSON.parse(event.body);
-            if (body['room-id']) {
+            if (body['room-id'] && body.name) {
                 const a = await dynamo.get({
                     TableName: process.env.TABLE_NAME,
                     Key: { 'room-id': body['room-id'] }
                 }).promise();
 
                 try {
+                    const names = [...a.Item.names, body.name];
+                    const users = [...a.Item.users, user_id];
+
                     await dynamo.update({
                         TableName: process.env.TABLE_NAME,
                         Key: {
                             'room-id': body['room-id']
                         },
-                        UpdateExpression: "set #users=:x",
+                        UpdateExpression: "set #users=:x, #names=:n",
                         ExpressionAttributeNames: {
-                            "#users": "users"
+                            "#users": "users",
+                            "#names": "names"
                         },
                         ExpressionAttributeValues: {
-                            ":x": [...a.Item.users, user_id]
+                            ":x": users,
+                            ":n": names
                         },
                         ReturnValues: "UPDATED_NEW"
                     }).promise();
 
-                    await sendMessage(user_id, JSON.stringify({ status: 200, message: 'added to group' }));
+                    await sendMessage(user_id, JSON.stringify({ status: 200, message: 'added to group', names }));
+                    await Promise.all(users.map(async id => await sendMessage(id, JSON.stringify({ action: "usersConnected", names }))))
                 } catch {
                     await sendMessage(user_id, JSON.stringify({ status: 400, message: 'group dosent exist.' }));
                 }
             } else {
-                await sendMessage(user_id, JSON.stringify({ status: 400, message: 'room-id is noot given' }));
+                await sendMessage(user_id, JSON.stringify({ status: 400, message: 'room-id or name is noot given' }));
             }
         } else if (route === 'create-group') {
             const body = JSON.parse(event.body);
 
-            if (body['room-id'] && body.link) {
+            if (body['room-id'] && body.link && body.name) {
                 await dynamo.put({
                     TableName: process.env.TABLE_NAME,
                     Item: {
                         'room-id': body['room-id'],
                         users: [user_id],
                         link: body.link,
+                        names: [body.name],
                         ttl: (Math.floor(Date.now() / 1000) + (8 * 3600))
                     }
                 }).promise();
 
                 await sendMessage(user_id, JSON.stringify({ status: 200, message: 'group created' }));
             } else {
-                await sendMessage(user_id, JSON.stringify({ status: 400, message: 'room-id or link is missing' }));
+                await sendMessage(user_id, JSON.stringify({ status: 400, message: 'room-id, user_name or link is missing' }));
             }
         } else if (route === 'jump') {
             const body = JSON.parse(event.body);
