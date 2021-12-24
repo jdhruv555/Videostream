@@ -3,10 +3,10 @@
 @tailwind components;
 @tailwind utilities;
 
-@font-face {
+/* @font-face {
   font-family: "Gistesy";
   src: url("../public/fonts/gistesy/Gistesy.ttf");
-}
+} */
 
 html,
 body {
@@ -18,7 +18,8 @@ body {
   align-items: center;
   justify-content: center;
   flex-direction: column;
-  background: url("../public/img/main_green_texture.jpg") repeat;
+  background-image: url("/img/main_green_texture_compressed.jpg");
+  background-repeat: repeat;
   background-position: center;
 }
 
