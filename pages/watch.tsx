@@ -1,55 +1,92 @@
 import Head from 'next/head';
 import type { NextPage } from 'next';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useContext } from 'react';
 import { useRouter } from 'next/router';
 import ReactPlayer from 'react-player';
+import crypto from 'crypto';
+import { WsContext } from '../context/websocket';
 import * as Icons from 'react-bootstrap-icons';
+import Spinner from '../components/Spinner';
+
+const decrypt = (text: string) => {
+    let textParts = text.split(':');
+    let iv = Buffer.from(textParts.shift(), 'hex');
+    let encryptedText = Buffer.from(textParts.join(':'), 'hex');
+    let decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(process.env.NEXT_PUBLIC_ENCRYPTION_KEY as string), iv);
+    let decrypted = decipher.update(encryptedText);
+
+    decrypted = Buffer.concat([decrypted, decipher.final()]);
+
+    return decrypted.toString();
+}
 
 interface videoState {
-    isPlaying: boolean;
     isMute: boolean;
     loaded: number;
     jump: number;
     played: number;
 };
 
+interface dataInterface {
+    videoLink: string;
+    roomId: string;
+    userName: string;
+};
+
 const Watch: NextPage = () => {
-    const [send, setSend] = useState<{ send: (options: { action: 'join' | 'jump' | 'play' | 'pause'; message: string }) => void } | boolean>(false);
     const [video, setVideo] = useState<videoState>({
-        isPlaying: false,
         isMute: false,
         loaded: 0,
         jump: 0,
         played: 0
     });
-    const [connection, setConnection] = useState(false);
+    const [isPlaying, setPlaying] = useState<boolean>(false);
     const [player, setPlayer] = useState<any>(null);
     const router = useRouter();
+    const [data, setData] = useState<dataInterface>({ roomId: null, userName: null, videoLink: null });
+    const { ws } = useContext(WsContext);
+
+    const sendMessage = (message: string) => {
+        if (typeof window !== "undefined") {
+            try {
+                ws.send(message)
+            } catch {
+                window.location.replace(window.location.origin);
+            }
+        };
+    };
+
+    if (typeof window !== "undefined") {
+        try {
+            ws.onopen = () => console.log('connected')
+        } catch {
+            window.location.replace(window.location.origin);
+        }
+    }
 
     useEffect(() => {
-        const ws_ = new WebSocket(process.env.NEXT_PUBLIC_WS_ENDPOINT);
-        ws_.onopen = () => {
-            setSend({ send: (options) => ws_.send(JSON.stringify(options)) });
-            // ws_.send(
-            //     JSON.stringify({
-            //         uuid: router.query.uuid,
-            //         link: router.query.link,
-            //         action: 'join'
-            //     })
-            // );
+        if (router.query.q === undefined) router.replace('/')
+        else setData(JSON.parse(decrypt(router.query.q.toString())));
+
+        ws.onmessage = message => {
+            if (message.data) {
+                const res = JSON.parse(message.data);
+
+                switch (res.action) {
+                    case "isPlaying":
+                        setPlaying(res.isPlaying);
+                        break;
+
+                    case "jump":
+                        player.seekTo(res['time-frame']);
+                        break;
+
+                    default:
+                        break;
+                }
+            }
         };
-
-        ws_.onmessage = message => {
-            console.log({ message });
-        };
-
-        console.log(router.query);
-
     }, []);
-
-    if (typeof send === "object") {
-
-    };
 
     return (
         <section>
@@ -59,12 +96,28 @@ const Watch: NextPage = () => {
                 <link rel="icon" href="/favicon.ico" />
             </Head>
             {
-                connection ?
+                data.roomId !== null ?
                     <main>
                         {
-                            video.isPlaying ?
-                                <Icons.Play onClick={() => setVideo({ ...video, isPlaying: false })} /> :
-                                <Icons.Stop onClick={() => setVideo({ ...video, isPlaying: true })} />
+                            isPlaying ?
+                                <Icons.Play onClick={
+                                    () => {
+                                        sendMessage(JSON.stringify({
+                                            "action": "isPlaying",
+                                            "isPlaying": false,
+                                            "room-id": data.roomId
+                                        }))
+                                    }
+                                } /> :
+                                <Icons.Stop onClick={
+                                    () => {
+                                        sendMessage(JSON.stringify({
+                                            "action": "isPlaying",
+                                            "isPlaying": true,
+                                            "room-id": data.roomId
+                                        }))
+                                    }
+                                } />
                         }
                         {
                             video.isMute ?
@@ -74,21 +127,29 @@ const Watch: NextPage = () => {
                         <input
                             type='range' min={0} max={1} step='any'
                             value={video.played}
-                            onChange={e => player.seekTo(e.target.value)}
+                            onChange={e => {
+                                sendMessage(JSON.stringify({
+                                    "action": "jump",
+                                    "room-id": data.roomId,
+                                    "time-frame": e.target.value
+                                }))
+                            }}
                         />
                         <input
                             type='range' min={0} max={1} step='any'
                             value={video.loaded}
                         />
+                        <h1 className='text-slate-50 text-2xl font-bold'>ROOM ID: {data.roomId}</h1>
                         <ReactPlayer
-                            url={router.query.link}
+                            url={data.videoLink}
                             muted={video.isMute}
-                            playing={video.isPlaying}
+                            playing={isPlaying}
                             onProgress={e => setVideo({ ...video, played: e.played, loaded: e.loaded })}
                             onEnded={() => setPlayer({ ...video, player: 1, loaded: 1 })}
                             ref={ref => setPlayer(ref)}
+
                         />
-                    </main> : <h1>CONNECTING...</h1>
+                    </main> : <Spinner />
             }
         </section>
     );

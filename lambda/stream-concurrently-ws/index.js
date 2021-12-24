@@ -56,30 +56,34 @@ exports.handler = async event => {
             }
         } else if (route === 'join') {
             const body = JSON.parse(event.body);
-            const a = await dynamo.get({
-                TableName: process.env.TABLE_NAME,
-                Key: { 'room-id': body['room-id'] }
-            }).promise();
-
-            try {
-                await dynamo.update({
+            if (body['room-id']) {
+                const a = await dynamo.get({
                     TableName: process.env.TABLE_NAME,
-                    Key: {
-                        'room-id': body['room-id']
-                    },
-                    UpdateExpression: "set #users=:x",
-                    ExpressionAttributeNames: {
-                        "#users": "users"
-                    },
-                    ExpressionAttributeValues: {
-                        ":x": [...a.Item.users, user_id]
-                    },
-                    ReturnValues: "UPDATED_NEW"
+                    Key: { 'room-id': body['room-id'] }
                 }).promise();
 
-                await sendMessage(user_id, 'added to group');
-            } catch {
-                await sendMessage(user_id, 'group dosent exists');
+                try {
+                    await dynamo.update({
+                        TableName: process.env.TABLE_NAME,
+                        Key: {
+                            'room-id': body['room-id']
+                        },
+                        UpdateExpression: "set #users=:x",
+                        ExpressionAttributeNames: {
+                            "#users": "users"
+                        },
+                        ExpressionAttributeValues: {
+                            ":x": [...a.Item.users, user_id]
+                        },
+                        ReturnValues: "UPDATED_NEW"
+                    }).promise();
+
+                    await sendMessage(user_id, JSON.stringify({ status: 200, message: 'added to group' }));
+                } catch {
+                    await sendMessage(user_id, JSON.stringify({ status: 400, message: 'group dosent exist.' }));
+                }
+            } else {
+                await sendMessage(user_id, JSON.stringify({ status: 400, message: 'room-id is noot given' }));
             }
         } else if (route === 'create-group') {
             const body = JSON.parse(event.body);
@@ -95,12 +99,9 @@ exports.handler = async event => {
                     }
                 }).promise();
 
-                await sendMessage(user_id, 'group created');
+                await sendMessage(user_id, JSON.stringify({ status: 200, message: 'group created' }));
             } else {
-                await sendMessage(user_id, JSON.stringify({
-                    error: true,
-                    schema: ["room-id", "link"]
-                }));
+                await sendMessage(user_id, JSON.stringify({ status: 400, message: 'room-id or link is missing' }));
             }
         } else if (route === 'jump') {
             const body = JSON.parse(event.body);
@@ -115,10 +116,7 @@ exports.handler = async event => {
 
                 await Promise.all(roomsForJump.Item.users.map(async user => await sendMessage(user, JSON.stringify({ action: 'jump', 'time-frame': body['time-frame'] }))));
             } else {
-                await sendMessage(user_id, JSON.stringify({
-                    error: true,
-                    schema: ["room-id", "time-frame"]
-                }));
+                await sendMessage(user_id, JSON.stringify({ status: 400, message: 'room-id or time-frame is missing' }));
             }
         } else if (route === 'isPlaying') {
             const body = JSON.parse(event.body);
@@ -133,15 +131,12 @@ exports.handler = async event => {
 
                 await Promise.all(roomsForJump.Item.users.map(async user => await sendMessage(user, JSON.stringify({ action: 'isPlaying', 'isPlaying': body['isPlaying'] }))));
             } else {
-                await sendMessage(user_id, JSON.stringify({
-                    error: true,
-                    schema: ["room-id", "isPlaying"]
-                }));
+                await sendMessage(user_id, JSON.stringify({ status: 400, message: 'room-id or isPlaying is missing' }));
             }
         }
     } catch (error) {
-        return { statusCode: 200, body: JSON.stringify({ err: error.message, user_id, event }) };
+        return { statusCode: 300 };
     }
 
-    return { statusCode: 200, body: JSON.stringify({ err: false, user_id }) };
+    return { statusCode: 200 };
 };
