@@ -42,6 +42,8 @@ const Watch: NextPage = () => {
         played: 0
     });
     const [isPlaying, setPlaying] = useState<boolean>(false);
+    const [userMsg, setUserMsg] = useState<string>('');
+    const [messages, setMessages] = useState<{ name: string; message: string; }[]>([]);
     const ref = useRef(null);
     const router = useRouter();
     const [data, setData] = useState<dataInterface>({ roomId: null, userName: null, videoLink: null, names: null });
@@ -59,7 +61,17 @@ const Watch: NextPage = () => {
 
     if (typeof window !== "undefined") {
         try {
-            ws.onopen = () => console.log('connected')
+            ws.onopen = () => {
+                console.log('connected');
+
+                setInterval(() => {
+                    sendMessage(JSON.stringify({ action: 'letMeLive' }));
+                }, 2 * 60 * 1000)
+            };
+
+            ws.onclose = () => {
+                alert('web socket connection closed, please try again.')
+            };
         } catch {
             window.location.replace(window.location.origin);
         }
@@ -89,12 +101,29 @@ const Watch: NextPage = () => {
                         setData({ ...queryData, names: res.names });
                         break;
 
+                    case "letMeLive":
+                        if (!res.live) {
+                            alert('websocket connected closed, please try again')
+                        }
+                        break;
+
+                    case "messasge":
+                        setMessages(state => [...state, { name: res.name, message: res.message }]);
+                        break;
+
                     default:
                         break;
                 }
             }
         };
     }, []);
+
+    const sendGroupMessage = () => {
+        if (userMsg.length > 0) {
+            sendMessage(JSON.stringify({ "action": "sendMessage", "name": data.userName, "message": userMsg, "room-id": data.roomId }));
+            setUserMsg('');
+        };
+    };
 
     return (
         <main className='h-screen w-screen flex justify-between items-center flex-col bg-transparent'>
@@ -107,12 +136,12 @@ const Watch: NextPage = () => {
                 data.roomId !== null ?
                     <section className='h-full w-full flex justify-start items-center flex-col xl:flex-row'>
                         <section className='h-fit w-full flex justify-start items-center flex-col xl:h-full xl:w-2/3'>
-                            <header className='flex h-20 w-full justify-between items-center px-10 xl:px-12'>
-                                <span className='text-2xl font-bold text-slate-50 cursor-pointer' onClick={() => router.push('/')}>Stream Concurrently</span>
-                                <span className='text-2xl font-bold text-slate-50'>{data.userName}</span>
+                            <header className='flex h-16 sm:h-20 w-full justify-between items-center px-10 xl:px-12'>
+                                <span className='text-xl md:text-2xl font-bold text-slate-50 cursor-pointer' onClick={() => router.push('/')}>Stream Concurrently</span>
+                                <span className='text-xl md:text-2xl font-bold text-slate-50 underline underline-offset-4'>Room Code : {data.roomId}</span>
                             </header>
-                            <section className='flex aspect-video max-w-3xl w-full p-3 justify-center items-center xl:mb-5 xl:max-w-none xl:p-12 pointer-events-none'>
-                                <section className='h-full w-full rounded-md xl:rounded-xl overflow-hidden'>
+                            <section className='flex aspect-video max-w-3xl w-full p-3 justify-center bg-transparent items-center xl:mb-5 xl:max-w-none xl:p-12 pointer-events-none'>
+                                <section className='h-full w-full rounded-md xl:rounded-xl overflow-hidden bg-transparent'>
                                     <ReactPlayer
                                         url={data.videoLink}
                                         muted={video.isMute}
@@ -127,7 +156,7 @@ const Watch: NextPage = () => {
                                 </section>
                             </section>
                             <section className='flex h-16 w-full max-w-3xl p-3 xl:px-12 justify-center items-center xl:max-w-none xl:h-24'>
-                                <section className='h-full w-full border-2 border-slate-50 backdrop-blur-[2px] flex justify-between items-center rounded-md xl:rounded-xl overflow-hidden'>
+                                <section className='h-full w-full border-2 border-slate-50 backdrop-blur-[1px] flex justify-between items-center rounded-md xl:rounded-xl overflow-hidden'>
                                     <div className='h-full w-fit'>
                                         <div className='h-full w-11 xl:w-20 flex justify-center items-center'>
                                             {
@@ -166,9 +195,8 @@ const Watch: NextPage = () => {
 
                         <section className='h-full w-full flex max-w-3xl md:p-3 xl:p-0 justify-start items-center flex-col md:flex-row-reverse xl:h-full xl:w-1/3 xl:flex-col'>
                             <section className='hidden w-full md:w-1/3 md:h-full md:flex md:ml-3 xl:ml-0 justify-center items-center xl:h-2/6 xl:w-full xl:mt-8 xl:pr-12 xl:pb-6'>
-                                <div className='h-full w-full border-2 border-slate-50 backdrop-blur-[2px] rounded-md xl:rounded-xl md:flex-col-reverse  xl:flex-row flex justify-center items-center overflow-hidden'>
+                                <div className='h-full w-full border-2 border-slate-50 backdrop-blur-[1px] rounded-md xl:rounded-xl md:flex-col-reverse  xl:flex-row flex justify-center items-center overflow-hidden'>
                                     <div className='h-full w-full xl:max-h-full xl:w-full flex p-5 pt-4 flex-col'>
-                                        <h1 className='text-2xl text-slate-50 font-bold underline underline-offset-4'>ROOM CODE : {data.roomId}</h1>
                                         <div className='h-full w-full xl:max-h-full xl:w-full pt-3 flex flex-col overflow-scroll overflow-x-hidden relative'>
                                             {data.names ? data.names.map((name, index) => <h1 key={index} className='text-2xl text-slate-50 font-bold'>{(index + 1) + " . " + name}</h1>) : null}
                                         </div>
@@ -179,9 +207,25 @@ const Watch: NextPage = () => {
                                 </div>
                             </section>
                             <section className='h-full w-full md:w-2/3 flex justify-center md:mr-3 xl:mr-0 items-center p-3 md:p-0 xl:h-4/6 xl:w-full xl:mb-16 xl:pr-12 xl:pt-6'>
-                                <div className='h-full w-full border-2 backdrop-blur-[2px] border-slate-50 rounded-md xl:rounded-xl flex justify-center items-center flex-col'>
-                                    <div className='h-full w-full rounded-md xl:rounded-xl'></div>
-                                    <div className='h-12 md:h-16 xl:h-16 w-11/12 m-5 border-2 border-slate-50 rounded-md xl:rounded-lg'></div>
+                                <div className='h-full w-full border-2 backdrop-blur-[1px] border-slate-50 rounded-md xl:rounded-xl flex justify-center items-center flex-col'>
+                                    <div className='h-full max-h-40 xl:max-h-full w-full rounded-md xl:rounded-xl p-5 overflow-scroll overflow-x-hidden'>
+                                        {
+                                            messages.map((value, index) =>
+                                                <div key={index} className='h-fit w-full flex justify-start items-start py-4'>
+                                                    <h1 className='text-2xl text-orange-200 font-bold underline underline-offset-4 mr-2'>{value.name}</h1>
+                                                    <h1 className='text-2xl text-orange-50  font-bold tracking-wide pl-4'>{value.message}</h1>
+                                                </div>
+                                            )
+                                        }
+                                    </div>
+                                    <div className='h-12 md:h-16 xl:h-16 w-11/12 m-5 border-2 border-slate-50 rounded-md xl:rounded-lg flex justify-center items-center overflow-hidden'>
+                                        <input type="text" value={userMsg} onChange={e => setUserMsg(e.target.value)} className='h-full w-full outline-none border-0 bg-transparent pl-4 text-xl font-bold text-slate-50 md:text-2xl' placeholder='Send Message' />
+                                        <div className='h-full w-fit'>
+                                            <button type="submit" className='h-full w-12 md:w-16 xl:w-16 bg-transparent text-slate-50 text-xl md:text-2xl flex justify-center items-center' onClick={sendGroupMessage}>
+                                                <Icons.Send />
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             </section>
                         </section>
