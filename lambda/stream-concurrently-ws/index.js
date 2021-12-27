@@ -147,6 +147,23 @@ exports.handler = async event => {
             } else {
                 await sendMessage(user_id, JSON.stringify({ status: 400, message: 'room-id or isPlaying is missing' }));
             }
+        } else if (route === "letMeLive") {
+            await sendMessage(user_id, JSON.stringify({ action: 'letMeLive', live: true }));
+        } else if (route === "sendMessage") {
+            const body = JSON.parse(event.body);
+
+            if (body['room-id'] && body['message'] && body.name) {
+                const roomsForJump = await dynamo.get({
+                    TableName: process.env.TABLE_NAME,
+                    Key: {
+                        'room-id': body['room-id']
+                    }
+                }).promise();
+
+                await Promise.all(roomsForJump.Item.users.map(async user => await sendMessage(user, JSON.stringify({ action: 'messasge', message: body['message'], name: body.name }))));
+            } else {
+                await sendMessage(user_id, JSON.stringify({ status: 400, message: 'room-id, name or message is missing' }));
+            }
         }
     } catch (error) {
         return { statusCode: 300 };
