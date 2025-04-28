@@ -20,8 +20,9 @@
     "validator": "^13.7.0"
   },
   "devDependencies": {
-    "@types/node": "^16.11.12",
-    "@types/react": "^17.0.37",
+    "@types/next": "^8.0.7",
+    "@types/node": "^16.18.126",
+    "@types/react": "^17.0.85",
     "@types/uuid": "^8.3.3",
     "@types/validator": "^13.7.0",
     "autoprefixer": "^10.4.0",

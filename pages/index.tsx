@@ -1,6 +1,6 @@
 import Head from 'next/head';
 import type { NextPage } from 'next';
-import { useState, useContext } from 'react';
+import { useState, useContext, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
@@ -35,129 +35,163 @@ const Home: NextPage = () => {
   const [url, setUrl] = useState<string>('');
   const [code, setCode] = useState<string>('');
   const [name, setName] = useState<string>('');
+  const [isCreating, setIsCreating] = useState<boolean>(false);
   const router = useRouter();
 
-  const { ws } = useContext(WsContext);
+  const { ws, isConnected, reconnect } = useContext(WsContext);
 
-  if (typeof window !== "undefined") {
-    try {
-      ws.onopen = () => console.log('connected')
-    } catch {
-      window.location.reload();
+  useEffect(() => {
+    if (!isConnected) {
+      console.log('WebSocket not connected, attempting to reconnect...');
+      reconnect();
     }
-  }
+  }, [isConnected, reconnect]);
 
   const validateForm = async (status: string) => {
     switch (status) {
       case "name":
         if (name.length <= 3) {
-          alert('name too short');
-          break;
-        };
-
+          alert('Name must be at least 4 characters long');
+          return;
+        }
         setForm(state => state + 1);
         break;
 
       case "joinGroup":
-        if ((code.length !== 9) || (code.indexOf('-') !== 4)) return alert('Invalid room code enter');
+        if ((code.length !== 9) || (code.indexOf('-') !== 4)) {
+          alert('Invalid room code format');
+          return;
+        }
 
-        await fetch(process.env.NEXT_PUBLIC_API_ENDPOINT, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            action: 'groups_exists',
-            uuid: code
-          })
-        })
-          .then(res => res.json())
-          .then(res => {
-            const data = JSON.parse(res.body).data.Item;
-            if (data) {
-              if (typeof window !== "undefined") { // browser
-                ws.send(JSON.stringify({
-                  "action": "join",
-                  "room-id": code,
-                  "name": name
-                }));
+        try {
+          const response = await fetch(process.env.NEXT_PUBLIC_API_ENDPOINT, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              action: 'groups_exists',
+              uuid: code
+            })
+          });
 
-                ws.onmessage = (res) => {
-                  const { status, names } = JSON.parse(res.data);
-                  if ((res.data !== "") && (status === 200)) {
-                    router.push({
-                      pathname: '/watch',
-                      query: {
-                        q: encrypt(
-                          JSON.stringify({
-                            videoLink: data.link,
-                            roomId: code,
-                            userName: name,
-                            names: [...names]
-                          })
-                        )
-                      }
-                    });
+          const res = await response.json();
+          const data = JSON.parse(res.body).data.Item;
+
+          if (!data) {
+            alert("Group doesn't exist.");
+            return;
+          }
+
+          if (!ws || !isConnected) {
+            alert('Connection not ready. Please wait or refresh the page.');
+            return;
+          }
+
+          ws.send(JSON.stringify({
+            action: "join",
+            "room-id": code,
+            name: name
+          }));
+
+          ws.onmessage = (res) => {
+            try {
+              const { status, names } = JSON.parse(res.data);
+              if (status === 200) {
+                router.push({
+                  pathname: '/watch',
+                  query: {
+                    q: encrypt(
+                      JSON.stringify({
+                        videoLink: data.link,
+                        roomId: code,
+                        userName: name,
+                      })
+                    )
                   }
-                };
-
-              };
-            } else {
-              alert("Group dosen't exist.")
+                });
+              } else {
+                alert('Failed to join room. Please try again.');
+              }
+            } catch (error) {
+              console.error('Error parsing WebSocket message:', error);
+              alert('Error joining room. Please try again.');
             }
-          })
+          };
+        } catch (error) {
+          console.error('Error joining group:', error);
+          alert('Failed to join group. Please try again.');
+        }
         break;
 
       case "createGroup":
-        console.log("Creating group with URL:", url);
         if (!validator.isURL(url)) {
-          alert("Enter a valid url");
-          break;
-        };
+          alert("Please enter a valid URL");
+          return;
+        }
 
-        if (typeof window !== "undefined") { // browser
-          const roomId = uuid(2);
-          console.log("Generated room ID:", roomId);
+        if (!ws || !isConnected) {
+          alert('Connection not ready. Please wait or refresh the page.');
+          return;
+        }
 
+        if (isCreating) {
+          alert('Room creation in progress. Please wait.');
+          return;
+        }
+
+        setIsCreating(true);
+        const roomId = uuid(2);
+        console.log("Creating room with ID:", roomId);
+
+        try {
           const message = JSON.stringify({
-            "action": "create-group",
+            action: "create-group",
             "room-id": roomId,
-            "link": url,
-            "name": name
+            link: url,
+            name: name
           });
-          console.log("Sending WebSocket message:", message);
 
-          try {
-            ws.send(message);
+          ws.send(message);
 
-            ws.onmessage = (res) => {
-              console.log("Received WebSocket response:", res.data);
-              if ((res.data !== "") && (JSON.parse(res.data).status === 200)) {
+          ws.onmessage = (res) => {
+            try {
+              const parsedData = JSON.parse(res.data);
+              console.log("Received response:", parsedData);
+
+              if (parsedData.status === 200) {
                 router.push({
                   pathname: '/watch',
                   query: {
                     q: encrypt(
                       JSON.stringify({
                         videoLink: url,
-                        roomId,
+                        roomId: roomId,
                         userName: name,
-                        names: [name]
                       })
                     )
                   }
                 });
+              } else {
+                alert(parsedData.message || 'Failed to create room. Please try again.');
               }
-            };
-          } catch (error) {
-            console.error("WebSocket error:", error);
-            alert("Failed to create room. Please try again.");
-          }
-        };
+            } catch (error) {
+              console.error("Error parsing response:", error);
+              alert("Error processing server response");
+            } finally {
+              setIsCreating(false);
+            }
+          };
+        } catch (error) {
+          console.error("WebSocket error:", error);
+          alert("Failed to create room. Please try again.");
+          setIsCreating(false);
+        }
         break;
 
       default:
         break;
-    };
+    }
   };
 
   return (
