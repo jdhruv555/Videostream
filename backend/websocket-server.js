@@ -14,12 +14,15 @@ wss.on('connection', (ws) => {
     ws.on('message', (message) => {
         try {
             const data = JSON.parse(message);
+            console.log('Received message:', data);
             
             switch (data.action) {
                 case 'create-group':
+                    console.log('Creating group with data:', data);
                     handleCreateGroup(ws, data);
                     break;
                 case 'join':
+                    console.log('Joining group with data:', data);
                     handleJoinGroup(ws, data);
                     break;
                 default:
@@ -39,6 +42,7 @@ wss.on('connection', (ws) => {
                 room.participants.splice(index, 1);
                 if (room.participants.length === 0) {
                     rooms.delete(roomId);
+                    console.log('Room deleted:', roomId);
                 } else {
                     broadcastToRoom(roomId, {
                         status: 200,
@@ -52,26 +56,36 @@ wss.on('connection', (ws) => {
 
 function handleCreateGroup(ws, data) {
     const { 'room-id': roomId, link, name } = data;
+    console.log('Creating room:', roomId, 'with link:', link);
     
     if (!rooms.has(roomId)) {
         rooms.set(roomId, {
             link,
             participants: [{ ws, name }]
         });
+        console.log('Room created successfully');
         
         ws.send(JSON.stringify({
             status: 200,
             message: 'Room created successfully'
+        }));
+    } else {
+        console.log('Room already exists:', roomId);
+        ws.send(JSON.stringify({
+            status: 400,
+            message: 'Room already exists'
         }));
     }
 }
 
 function handleJoinGroup(ws, data) {
     const { 'room-id': roomId, name } = data;
+    console.log('Joining room:', roomId, 'with name:', name);
     
     if (rooms.has(roomId)) {
         const room = rooms.get(roomId);
         room.participants.push({ ws, name });
+        console.log('User joined room successfully');
         
         // Notify all participants about the new join
         broadcastToRoom(roomId, {
@@ -79,6 +93,7 @@ function handleJoinGroup(ws, data) {
             names: room.participants.map(p => p.name)
         });
     } else {
+        console.log('Room not found:', roomId);
         ws.send(JSON.stringify({
             status: 404,
             message: 'Room not found'
@@ -89,6 +104,7 @@ function handleJoinGroup(ws, data) {
 function broadcastToRoom(roomId, message) {
     const room = rooms.get(roomId);
     if (room) {
+        console.log('Broadcasting to room:', roomId, 'message:', message);
         room.participants.forEach(({ ws }) => {
             if (ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify(message));

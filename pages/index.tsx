@@ -109,6 +109,7 @@ const Home: NextPage = () => {
         break;
 
       case "createGroup":
+        console.log("Creating group with URL:", url);
         if (!validator.isURL(url)) {
           alert("Enter a valid url");
           break;
@@ -116,32 +117,41 @@ const Home: NextPage = () => {
 
         if (typeof window !== "undefined") { // browser
           const roomId = uuid(2);
+          console.log("Generated room ID:", roomId);
 
-          ws.send(JSON.stringify({
+          const message = JSON.stringify({
             "action": "create-group",
             "room-id": roomId,
             "link": url,
             "name": name
-          }));
+          });
+          console.log("Sending WebSocket message:", message);
 
-          ws.onmessage = (res) => {
-            if ((res.data !== "") && (JSON.parse(res.data).status === 200)) {
-              router.push({
-                pathname: '/watch',
-                query: {
-                  q: encrypt(
-                    JSON.stringify({
-                      videoLink: url,
-                      roomId,
-                      userName: name,
-                      names: [name]
-                    })
-                  )
-                }
-              });
-            }
-          };
+          try {
+            ws.send(message);
 
+            ws.onmessage = (res) => {
+              console.log("Received WebSocket response:", res.data);
+              if ((res.data !== "") && (JSON.parse(res.data).status === 200)) {
+                router.push({
+                  pathname: '/watch',
+                  query: {
+                    q: encrypt(
+                      JSON.stringify({
+                        videoLink: url,
+                        roomId,
+                        userName: name,
+                        names: [name]
+                      })
+                    )
+                  }
+                });
+              }
+            };
+          } catch (error) {
+            console.error("WebSocket error:", error);
+            alert("Failed to create room. Please try again.");
+          }
         };
         break;
 
